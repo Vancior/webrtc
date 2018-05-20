@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Server</title>
+  <link href="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.css" rel="stylesheet" type="text/css">
+  <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8=" crossorigin="anonymous"></script>
+  <script src="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+</head>
+
+<body>
+  <div class="ui container">
+  <video muted autoplay id="remote1"></video>
+  </div>
+</body>
+<script>
+  'use strict';
+  $('.ui.dropdown').dropdown();
+
+  var socket = io.connect('http://123.206.54.85:3333');
+
+  var remoteElement = document.querySelector('video#remote1');
+
+  socket.emit('server');
+  socket.on('offer', (offer) => {
+    pc.setRemoteDescription(new RTCSessionDescription(message));
+    console.log('Sending answer to peer.');
+    pc.createAnswer().then(
+      setLocalAndSendMessage,
+      onCreateSessionDescriptionError
+    );
+    
+  }
+
+  /*
+  navigator.mediaDevices.enumerateDevices().then(gotDevices).catch(handleError);
+
+  function gotDevices(deviceInfos) {
+    for (var i = 0; i !== deviceInfos.length; ++i) {
+      var deviceInfo = deviceInfos[i];
+      var option = document.createElement('option');
+      option.value = deviceInfo.deviceId;
+      if (deviceInfo.kind === 'videoinput') {
+        option.text = deviceInfo.label || 'camera ' + (videoSelect.length + 1);
+        videoSelect.appendChild(option);
+        console.log('Found camera: ', deviceInfo);
+      }
+      else {
+        console.log('Found on other kind of source/device: ', deviceInfo);
+      }
+    }
+  }
+
+  function getStream() {
+    if (window.stream) {
+      window.stream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+    }
+
+    var constraints = {
+      video: {
+        deviceId: { exact: videoSelect.value }
+      }
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints).then(gotStream).catch(handleError);
+  }
+
+  function gotStream(stream) {
+    window.stream = stream; // make stream available to console
+    videoElement1.srcObject = stream;
+    // videoElement2.srcObject = stream;
+  }
+
+  function handleError(error) {
+    console.log('Error: ', error);
+  }
+  */
+</script>
+
