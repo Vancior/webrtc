@@ -4,7 +4,8 @@
 <head>
   <title>Server</title>
   <link href="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.css" rel="stylesheet" type="text/css">
-  <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8=" crossorigin="anonymous"></script>
+  <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+    crossorigin="anonymous"></script>
   <script src="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
   <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
@@ -12,26 +13,106 @@
 
 <body>
   <div class="ui container">
-  <video muted autoplay id="remote1"></video>
+    <div id="videos">
+    </div>
   </div>
 </body>
 <script>
   'use strict';
-  $('.ui.dropdown').dropdown();
+  var videosElement = document.querySelector('#videos');
 
   var socket = io.connect('http://123.206.54.85:3333');
+  var pcs = {};
+  var serverOption = {
+    'iceServers': [{
+      'urls': 'stun:stun.l.google.com:19302'
+    }]
+  };
 
-  var remoteElement = document.querySelector('video#remote1');
-
+  // I'm the server
   socket.emit('server');
+  // offer received
   socket.on('offer', (offer) => {
-    pc.setRemoteDescription(new RTCSessionDescription(message));
+    var pc = new RTCPeerConnection(serverOption);
+    var id = offer.from;
+    pcs.id = pc;
+    pc.onicecandidate = handleIceCandidate;
+    pc.onaddstream = function (event) {
+      console.log('add stream');
+      var video = document.createElement('video');
+      video.id = id;
+      video.autoplay = true;
+      video.muted = true;
+      video.srcObject = event.stream;
+      videosElement.appendChild(video);
+    };
+    pc.oniceconnectionstatechange = function () {
+      if (pc.iceConnectionState == 'disconnected') {
+        console.log('Disconnected');
+        pc.close();
+        var query = '#';
+        if (!isNaN(parseInt(id[0])))
+          query += '\\';
+        var video = document.querySelector(query+id);
+        video.parentNode.removeChild(video);
+      }
+    };
+    pc.setRemoteDescription(new RTCSessionDescription(offer));
     console.log('Sending answer to peer.');
     pc.createAnswer().then(
-      setLocalAndSendMessage,
-      onCreateSessionDescriptionError
+      (sessionDescription) => {
+        pc.setLocalDescription(sessionDescription);
+        console.log('setLocalAndSendMessage sending message', sessionDescription);
+        socket.emit('answer', sessionDescription);
+      },
+      handleError
     );
-    
+  });
+  socket.on('message', (message) => {
+    console.log('candidate received');
+    var candidate = new RTCIceCandidate({
+      sdpMLineIndex: message.label,
+      candidate: message.candidate
+    });
+    var id = message.from;
+    pcs.id.addIceCandidate(candidate);
+  });
+
+  function handleIceCandidate(event) {
+    console.log('icecandidate event: ', event);
+    if (event.candidate) {
+      socket.emit('message', {
+        type: 'candidate',
+        label: event.candidate.sdpMLineIndex,
+        id: event.candidate.sdpMid,
+        candidate: event.candidate.candidate
+      });
+    } else {
+      console.log('End of candidates.');
+    }
+  }
+
+  function handleAddStream(event) {
+    console.log('add stream');
+    var video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true;
+    video.srcObject = event.stream;
+    videosElement.appendChild(video);
+  }
+
+  function handleRemoveStream(event) {
+    console.log('remove stream');
+  }
+
+  function setLocalAndSendMessage(sessionDescription) {
+    this.setLocalDescription(sessionDescription);
+    console.log('setLocalAndSendMessage sending message', sessionDescription);
+    socket.emit('answer', sessionDescription);
+  }
+
+  function handleError(error) {
+    console.log('Error: ', error);
   }
 
   /*
@@ -81,3 +162,4 @@
   */
 </script>
 
+</html>

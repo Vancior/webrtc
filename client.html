@@ -4,7 +4,8 @@
 <head>
   <title>Client</title>
   <link href="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.css" rel="stylesheet" type="text/css">
-  <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8=" crossorigin="anonymous"></script>
+  <script src="https://code.jquery.com/jquery-3.1.1.min.js" integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+    crossorigin="anonymous"></script>
   <script src="https://cdn.bootcss.com/semantic-ui/2.3.1/semantic.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
   <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
@@ -18,10 +19,10 @@
       <div class="column">
         <video muted autoplay id="video1"></video>
       </div>
-<!--       <div class="column">
+      <!--       <div class="column">
         <video muted autoplay id="video2"></video>
       </div>
- -->    </div>
+ --></div>
     <div class="ui primary button" id="start">Start</div>
     <div class="ui primary button" id="send">Send</div>
   </div>
@@ -29,15 +30,43 @@
 <script>
   'use strict';
   $('.ui.dropdown').dropdown();
+  navigator.mediaDevices.enumerateDevices().then(gotDevices).then(getStream).catch(handleError);
+  var videoElement1 = document.querySelector('video#video1');
+  var videoSelect = document.querySelector('select#videoSource');
+  var startButton = document.querySelector('#start');
+  var sendButton = document.querySelector('#send');
+  startButton.onclick = getStream;
+  videoSelect.onchange = getStream;
+  sendButton.onclick = handleCreateOffer;
 
-  var socket = io();
+  var localStream;
+  var socket = io.connect('http://123.206.54.85:3333');
   var pc;
+  var serverOption = {
+    'iceServers': [{
+      'urls': 'stun:stun.l.google.com:19302'
+    }]
+  };
+  // rtc peer connection
+  pc = new RTCPeerConnection(serverOption);
+  pc.onicecandidate = handleIceCandidate;
+  // call
+  // getStream();
+  function handleCreateOffer() {
+    pc.createOffer(setLocalAndSendMessage, handleError, {
+      mandatory: {
+        OfferToReceiveVideo: true
+      }
+    });
+  }
 
   // socket listen
   socket.on('answer', (answer) => {
+    console.log('answer receive');
     pc.setRemoteDescription(new RTCSessionDescription(answer));
   });
   socket.on('message', (message) => {
+    console.log('candidate receive');
     var candidate = new RTCIceCandidate({
       sdpMLineIndex: message.label,
       candidate: message.candidate
@@ -45,30 +74,30 @@
     pc.addIceCandidate(candidate);
   })
 
-  var videoElement1 = document.querySelector('video#video1');
-  // var videoElement2 = document.querySelector('video#video2');
-  var videoSelect = document.querySelector('select#videoSource');
-  var startButton = document.querySelector('#start');
-  var sendButton = document.querySelector('#send');
+  function handleIceCandidate(event) {
+    console.log('icecandidate event: ', event);
+    if (event.candidate) {
+      socket.emit('message', {
+        type: 'candidate',
+        label: event.candidate.sdpMLineIndex,
+        id: event.candidate.sdpMid,
+        candidate: event.candidate.candidate
+      });
+    } else {
+      console.log('End of candidates.');
+    }
+  }
 
-  var serverOption = {
-    'iceServers': [{
-      'urls': 'stun:stun.l.google.com:19302'
-    }]
-  };
-  var localStream;
+  function setLocalAndSendMessage(sessionDescription) {
+    pc.setLocalDescription(sessionDescription);
+    console.log('setLocalAndSendMessage sending message', sessionDescription);
+    socket.emit('offer', sessionDescription);
+  }
 
-  // rtc peer connection
-  pc = new RTCPeerConnection(serverOption);
-  pc.onicecandidate = handleIceCandidate;
 
-  // call
-  pc.createOffer(setLocalAndSendMessage, handleError);
 
-  navigator.mediaDevices.enumerateDevices().then(gotDevices).catch(handleError);
 
-  startButton.onclick = getStream;
-  videoSelect.onchange = getStream;
+
 
   function gotDevices(deviceInfos) {
     for (var i = 0; i !== deviceInfos.length; ++i) {
@@ -108,27 +137,9 @@
     if (localStream)
       pc.removeStream(localStream);
     localStream = stream;
-    pc.addStream(localStream);
-  }
-
-  function handleIceCandidate(event) {
-    console.log('icecandidate event: ', event);
-    if (event.candidate) {
-      socket.emit('message', {
-        type: 'candidate',
-        label: event.candidate.sdpMLineIndex,
-        id: event.candidate.sdpMid,
-        candidate: event.candidate.candidate
-      });
-    } else {
-      console.log('End of candidates.');
-    }
-  }
-
-  function setLocalAndSendMessage(sessionDescription) {
-    pc.setLocalDescription(sessionDescription);
-    console.log('setLocalAndSendMessage sending message', sessionDescription);
-    sendMessage(sessionDescription);
+    stream.getTracks().forEach(function (track) {
+      pc.addTrack(track, stream);
+    });
   }
 
   function handleError(error) {
